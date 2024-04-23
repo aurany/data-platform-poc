@@ -1,0 +1,46 @@
+version: '2'
+services:
+
+  zookeeper:
+    image: quay.io/debezium/zookeeper:${DEBEZIUM_VERSION}
+    ports:
+      - 2181:2181
+      - 2888:2888
+      - 3888:3888
+
+  kafka:
+    image: quay.io/debezium/kafka:${DEBEZIUM_VERSION}
+    ports:
+      - 9092:9092
+    links:
+      - zookeeper
+    environment:
+      - ZOOKEEPER_CONNECT=zookeeper:2181
+
+  cassandra:
+    #image: debezium/example-cassandra:${DEBEZIUM_VERSION}
+    build:
+      dockerfile: Dockerfile
+      context: .
+      args:
+        - DEBEZIUM_VERSION=${DEBEZIUM_VERSION}
+    ports:
+      - 9042:9042
+    links:
+      - zookeeper
+      - kafka
+    volumes:
+      - /var/lib/cassandra
+
+  kafka-ui:
+    container_name: kafka-ui
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - 8080:8080
+    depends_on:
+      - kafka
+      - zookeeper
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      DYNAMIC_CONFIG_ENABLED: 'true'
