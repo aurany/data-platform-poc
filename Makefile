@@ -8,4 +8,9 @@ up:
 down:
 	docker compose down -v
 
-all: down build up
+wait:
+	docker logs --follow cassandra | grep -i -m 1 polling
+	sleep 3
+	docker logs cassandra | grep -i exception
+
+all: down build up wait
