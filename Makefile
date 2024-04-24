@@ -7,3 +7,5 @@ up:
 
 down:
 	docker compose down -v
+
+all: down build up
