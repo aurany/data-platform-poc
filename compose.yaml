@@ -26,20 +26,42 @@ services:
       KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
       CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
 
-  schema-registry:
-    image: confluentinc/cp-schema-registry:7.5.3
-    hostname: schema-registry
-    container_name: schema-registry
+  connect:
+    image: confluentinc/cp-kafka-connect-base:7.5.3
+    hostname: connect
+    container_name: connect
     depends_on:
       - kafka
-    links:
-      - kafka
+      - minio
     ports:
-      - "8081:8081"
+      - 8083:8083
     environment:
-      SCHEMA_REGISTRY_HOST_NAME: schema-registry
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka:9092'
-      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      CONNECT_BOOTSTRAP_SERVERS: 'kafka:9092'
+      CONNECT_REST_ADVERTISED_HOST_NAME: "connect"
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: connect-cluster-group
+      CONNECT_CONFIG_STORAGE_TOPIC: _kafka-connect-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: _kafka-connect-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: _kafka-connect-status
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_INTERNAL_KEY_CONVERTER: "org.apache.kafka.connect.json.StringConverter"
+      CONNECT_INTERNAL_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_INTERNAL_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_LOG4J_ROOT_LOGLEVEL: "INFO"
+      CONNECT_LOG4J_LOGGERS: "org.apache.kafka.connect.runtime.rest=WARN,org.reflections=ERROR"
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_PLUGIN_PATH: '/usr/share/java,/usr/share/confluent-hub-components/,/connectors/'
+      AWS_ACCESS_KEY_ID: "minio"
+      AWS_SECRET_ACCESS_KEY: "minio123"
+    volumes:
+      - ./connect/start.sh:/scripts/start.sh
+    command: /bin/bash /scripts/start.sh
 
   kafka-ui:
     image: 'provectuslabs/kafka-ui:latest'
@@ -49,15 +71,30 @@ services:
       - "8080:8080"
     depends_on:
       - kafka
-      - schema-registry
+      #- schema-registry
     links:
       - kafka
-      - schema-registry
+      #- schema-registry
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
-      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
+      #KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
       #KAFKA_CLUSTERS_0_METRICS_PORT: 9997
+
+  rest:
+    image: tabulario/iceberg-rest
+    hostname: rest
+    container_name: rest
+    ports:
+      - 8181:8181
+    environment:
+      - AWS_ACCESS_KEY_ID=minio
+      - AWS_SECRET_ACCESS_KEY=minio123
+      - AWS_REGION=eu-west-1
+      - CATALOG_WAREHOUSE=s3a://warehouse/
+      - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
+      - CATALOG_S3_ENDPOINT=http://minio:9000
+      - CATALOG_S3_PATH__STYLE__ACCESS=True
 
   cassandra:
     #image: debezium/example-cassandra:${DEBEZIUM_VERSION}
@@ -71,10 +108,10 @@ services:
     ports:
       - 9042:9042
     depends_on:
-      - schema-registry
+      #- schema-registry
       - kafka
     links:
-      - schema-registry
+      #- schema-registry
       - kafka
 
   minio:
@@ -88,65 +125,94 @@ services:
     ports:
       - "9001:9001"
       - "9000:9000"
-    command: [ "server", "/data", "--console-address", ":9001" ]
-    # volumes:
-    #   - ./minio:/data
+    command: server /data --console-address :9001
+    #volumes:
+    #  - ./minio:/data
     environment:
       - MINIO_ROOT_USER=minio
       - MINIO_ROOT_PASSWORD=minio123
       - MINIO_ACCESS_KEY=minio
       - MINIO_SECRET_KEY=minio123
 
-  spark-master:
-    container_name: spark-master
-    hostname: spark-master
-    build:
-      dockerfile: Dockerfile
-      context: spark
+  createbucket:
+    image: minio/mc
+    container_name: createbucket
+    hostname: createbucket
     depends_on:
       - minio
-    links:
-      - minio
-    environment:
-      - SPARK_MODE=master
-      - SPARK_LOCAL_IP=spark-master
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-      - SPARK_RPC_ENCRYPTION_ENABLED=no
-      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
-      - SPARK_SSL_ENABLED=no
-    ports:
-      - "7077:7077"
-      - "8088:8080"
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 minio minio123;
+      /usr/bin/mc mb myminio/warehouse;
+      /usr/bin/mc policy set public myminio/warehouse;
+      exit 0;
+      "
 
-  spark-worker:
-    build:
-      dockerfile: Dockerfile
-      context: spark
-    container_name: spark-worker
-    hostname: spark-worker
-    depends_on:
-      - spark-master
-    links:
-      - spark-master
-    environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_MEMORY=1G
-      - SPARK_WORKER_CORES=1
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-      - SPARK_RPC_ENCRYPTION_ENABLED=no
-      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
-      - SPARK_SSL_ENABLED=no
+  # schema-registry:
+  #   image: confluentinc/cp-schema-registry:7.5.3
+  #   hostname: schema-registry
+  #   container_name: schema-registry
+  #   depends_on:
+  #     - kafka
+  #   links:
+  #     - kafka
+  #   ports:
+  #     - "8081:8081"
+  #   environment:
+  #     SCHEMA_REGISTRY_HOST_NAME: schema-registry
+  #     SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka:9092'
+  #     SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
 
-  app:
-    build:
-        dockerfile: Dockerfile
-        context: spark
-    container_name: app
-    hostname: app
-    depends_on:
-      - spark-master
-    links:
-      - spark-master
-    volumes:
-      - ./app.py:/app.py
+  # spark-master:
+  #   container_name: spark-master
+  #   hostname: spark-master
+  #   build:
+  #     dockerfile: Dockerfile
+  #     context: spark
+  #   depends_on:
+  #     - minio
+  #   links:
+  #     - minio
+  #   environment:
+  #     - SPARK_MODE=master
+  #     - SPARK_LOCAL_IP=spark-master
+  #     - SPARK_RPC_AUTHENTICATION_ENABLED=no
+  #     - SPARK_RPC_ENCRYPTION_ENABLED=no
+  #     - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+  #     - SPARK_SSL_ENABLED=no
+  #   ports:
+  #     - "7077:7077"
+  #     - "8088:8080"
+
+  # spark-worker:
+  #   build:
+  #     dockerfile: Dockerfile
+  #     context: spark
+  #   container_name: spark-worker
+  #   hostname: spark-worker
+  #   depends_on:
+  #     - spark-master
+  #   links:
+  #     - spark-master
+  #   environment:
+  #     - SPARK_MODE=worker
+  #     - SPARK_MASTER_URL=spark://spark-master:7077
+  #     - SPARK_WORKER_MEMORY=1G
+  #     - SPARK_WORKER_CORES=1
+  #     - SPARK_RPC_AUTHENTICATION_ENABLED=no
+  #     - SPARK_RPC_ENCRYPTION_ENABLED=no
+  #     - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+  #     - SPARK_SSL_ENABLED=no
+
+  # app:
+  #   build:
+  #       dockerfile: Dockerfile
+  #       context: spark
+  #   container_name: app
+  #   hostname: app
+  #   depends_on:
+  #     - spark-master
+  #   links:
+  #     - spark-master
+  #   volumes:
+  #     - ./app.py:/app.py
