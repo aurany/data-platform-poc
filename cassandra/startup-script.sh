@@ -2,6 +2,11 @@
 
 sh /opt/cassandra/bin/cassandra -f &
 
+while ! ls /opt/cassandra/logs | grep -q system.log
+do
+  sleep 1
+done;
+
 while ! grep -q "Created default superuser role 'cassandra" /opt/cassandra/logs/system.log
 do
   sleep 1

@@ -1,4 +1,7 @@
 
+prep:
+	git clone https://github.com/delta-io/kafka-delta-ingest.git
+
 build:
 	docker compose build
 
@@ -9,8 +12,6 @@ down:
 	docker compose down -v
 
 wait:
-	docker logs --follow cassandra | grep -i -m 1 polling
-	sleep 3
-	docker logs cassandra | grep -i exception
+	docker logs --follow cassandra | grep -q -i -m 1 polling
 
 all: down build up wait
