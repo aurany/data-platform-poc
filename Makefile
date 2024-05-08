@@ -15,3 +15,5 @@ wait:
 	docker logs --follow cassandra | grep -q -i -m 1 polling
 
 all: down build up wait
+
+#docker exec -it spark spark-sql -f /home/iceberg/query.sql

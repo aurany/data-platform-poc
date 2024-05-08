@@ -1,10 +1,33 @@
-version: '2'
+version: "3"
+
 services:
+
+  cassandra:
+    #image: debezium/example-cassandra:${DEBEZIUM_VERSION}
+    container_name: cassandra
+    hostname: cassandra
+    networks:
+      platform:
+    build:
+      dockerfile: Dockerfile
+      context: cassandra
+      args:
+        - DEBEZIUM_VERSION=${DEBEZIUM_VERSION}
+    ports:
+      - 9042:9042
+    depends_on:
+      #- schema-registry
+      - kafka
+    links:
+      #- schema-registry
+      - kafka
 
   kafka:
     image: confluentinc/cp-kafka:7.5.3
     hostname: kafka
     container_name: kafka
+    networks:
+      platform:
     ports:
       - "9092:9092"
       - "9101:9101"
@@ -30,6 +53,8 @@ services:
     image: confluentinc/cp-kafka-connect-base:7.5.3
     hostname: connect
     container_name: connect
+    networks:
+      platform:
     depends_on:
       - kafka
       - minio
@@ -43,11 +68,11 @@ services:
       CONNECT_CONFIG_STORAGE_TOPIC: _kafka-connect-configs
       CONNECT_OFFSET_STORAGE_TOPIC: _kafka-connect-offsets
       CONNECT_STATUS_STORAGE_TOPIC: _kafka-connect-status
-      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
       CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
       CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
       CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
-      CONNECT_INTERNAL_KEY_CONVERTER: "org.apache.kafka.connect.json.StringConverter"
+      CONNECT_INTERNAL_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
       CONNECT_INTERNAL_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
       CONNECT_INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
       CONNECT_INTERNAL_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
@@ -57,18 +82,61 @@ services:
       CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
       CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
       CONNECT_PLUGIN_PATH: '/usr/share/java,/usr/share/confluent-hub-components/,/connectors/'
-      AWS_ACCESS_KEY_ID: "minio"
-      AWS_SECRET_ACCESS_KEY: "minio123"
+      AWS_ACCESS_KEY_ID: "admin"
+      AWS_SECRET_ACCESS_KEY: "password"
+      AWS_REGION: "us-east-1"
     volumes:
       - ./connect/start.sh:/scripts/start.sh
     command: /bin/bash /scripts/start.sh
+
+  # connect:
+  #   image: debezium/connect:2.6.1.Final
+  #   hostname: connect
+  #   container_name: connect
+  #   networks:
+  #     platform:
+  #   depends_on:
+  #     - kafka
+  #     - minio
+  #   ports:
+  #     - 8083:8083
+  #   environment:
+  #     BOOTSTRAP_SERVERS: 'kafka:9092'
+  #     GROUP_ID: connect-cluster-group
+  #     REST_ADVERTISED_HOST_NAME: "connect"
+  #     REST_PORT: 8083
+  #     CONFIG_STORAGE_TOPIC: _kafka-connect-configs
+  #     OFFSET_STORAGE_TOPIC: _kafka-connect-offsets
+  #     STATUS_STORAGE_TOPIC: _kafka-connect-status
+  #     KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+  #     KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+  #     VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+  #     VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+  #     INTERNAL_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+  #     INTERNAL_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+  #     INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+  #     INTERNAL_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+  #     LOG4J_ROOT_LOGLEVEL: "INFO"
+  #     LOG4J_LOGGERS: "org.apache.kafka.connect.runtime.rest=WARN,org.reflections=ERROR"
+  #     CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+  #     OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+  #     STATUS_STORAGE_REPLICATION_FACTOR: "1"
+  #     PLUGIN_PATH: '/usr/share/java,/usr/share/confluent-hub-components/,/connectors/'
+  #     AWS_ACCESS_KEY_ID: "admin"
+  #     AWS_SECRET_ACCESS_KEY: "password"
+  #     AWS_REGION: "us-east-1"
+  #   volumes:
+  #     - ./connect/start.sh:/scripts/start.sh
+  #   command: /bin/bash /scripts/start.sh
 
   kafka-ui:
     image: 'provectuslabs/kafka-ui:latest'
     container_name: kafka-ui
     hostname: kafka-ui
+    networks:
+      platform:
     ports:
-      - "8080:8080"
+      - "8880:8080"
     depends_on:
       - kafka
       #- schema-registry
@@ -81,72 +149,84 @@ services:
       #KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
       #KAFKA_CLUSTERS_0_METRICS_PORT: 9997
 
+  spark:
+    image: tabulario/spark-iceberg
+    hostname: spark
+    container_name: spark
+    networks:
+      platform:
+    depends_on:
+      - rest
+      - minio
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+    volumes:
+      - ./spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./spark/query.sql:/home/iceberg/query.sql
+    ports:
+      - 8888:8888
+      - 8080:8080
+      - 10000:10000
+      - 10001:10001
+
   rest:
     image: tabulario/iceberg-rest
     hostname: rest
     container_name: rest
+    networks:
+      platform:
     ports:
       - 8181:8181
     environment:
-      - AWS_ACCESS_KEY_ID=minio
-      - AWS_SECRET_ACCESS_KEY=minio123
-      - AWS_REGION=eu-west-1
-      - CATALOG_WAREHOUSE=s3a://warehouse/
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+      - CATALOG_WAREHOUSE=s3://warehouse/
       - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
       - CATALOG_S3_ENDPOINT=http://minio:9000
-      - CATALOG_S3_PATH__STYLE__ACCESS=True
-
-  cassandra:
-    #image: debezium/example-cassandra:${DEBEZIUM_VERSION}
-    container_name: cassandra
-    hostname: cassandra
-    build:
-      dockerfile: Dockerfile
-      context: cassandra
-      args:
-        - DEBEZIUM_VERSION=${DEBEZIUM_VERSION}
-    ports:
-      - 9042:9042
-    depends_on:
-      #- schema-registry
-      - kafka
-    links:
-      #- schema-registry
-      - kafka
 
   minio:
-    image: "minio/minio:RELEASE.2024-04-18T19-09-19Z"
-    container_name: minio
+    image: minio/minio
     hostname: minio
-    depends_on:
-      - cassandra
-    links:
-      - cassandra
-    ports:
-      - "9001:9001"
-      - "9000:9000"
-    command: server /data --console-address :9001
-    #volumes:
-    #  - ./minio:/data
+    container_name: minio
     environment:
-      - MINIO_ROOT_USER=minio
-      - MINIO_ROOT_PASSWORD=minio123
-      - MINIO_ACCESS_KEY=minio
-      - MINIO_SECRET_KEY=minio123
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password
+      - MINIO_DOMAIN=minio
+    networks:
+      platform:
+        aliases:
+          - warehouse.minio
+    ports:
+      - 9001:9001
+      - 9000:9000
+    command: ["server", "/data", "--console-address", ":9001"]
 
-  createbucket:
+  mc:
     image: minio/mc
-    container_name: createbucket
-    hostname: createbucket
+    hostname: mc
+    container_name: mc
     depends_on:
       - minio
+    networks:
+      platform:
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
     entrypoint: >
       /bin/sh -c "
-      /usr/bin/mc alias set myminio http://minio:9000 minio minio123;
-      /usr/bin/mc mb myminio/warehouse;
-      /usr/bin/mc policy set public myminio/warehouse;
-      exit 0;
+      until (/usr/bin/mc config host add minio http://minio:9000 admin password) do echo '...waiting...' && sleep 1; done;
+      /usr/bin/mc rm -r --force minio/warehouse;
+      /usr/bin/mc mb minio/warehouse;
+      /usr/bin/mc policy set public minio/warehouse;
+      tail -f /dev/null
       "
+
+networks:
+  platform:
 
   # schema-registry:
   #   image: confluentinc/cp-schema-registry:7.5.3
