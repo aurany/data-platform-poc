@@ -34,16 +34,22 @@ curl -X PUT \
         "iceberg.control.commit.interval-ms": "1000",
         "iceberg.tables.auto-create-enabled": "true",
         "iceberg.tables.evolve-schema-enabled": "true",
-        "iceberg.tables.route-field": "payload.source.table",
+        "iceberg.tables.route-field": "__table",
         "iceberg.table.testdb.customers.route-regex": "customers",
         "iceberg.table.testdb.products.route-regex": "products",
         "iceberg.tables": "testdb.customers,testdb.products",
         "key.converter": "org.apache.kafka.connect.json.JsonConverter",
-        "key.converter.schemas.enable": "false",
+        "key.converter.schemas.enable": "true",
         "value.converter": "org.apache.kafka.connect.json.JsonConverter",
-        "value.converter.schemas.enable": "false"
+        "value.converter.schemas.enable": "true",
+        "transforms": "unwrap",
+        "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+        "transforms.unwrap.add.fields": "op,table,source.ts_ms"
     }'
 sleep infinity
+
+        # "transforms.extract.type": "org.apache.kafka.connect.transforms.ExtractField$Value",
+        # "transforms.extract.field": "value"
 
 # "transforms": "flatten",
 # "transforms.flatten.type": "org.apache.kafka.connect.transforms.Flatten$Value",

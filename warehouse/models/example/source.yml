@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: testdb
+    schema: testdb
+    config:
+      enabled: true
+    tables:
+      - name: customers  # enabled

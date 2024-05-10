@@ -50,7 +50,12 @@ services:
       CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
 
   connect:
-    image: confluentinc/cp-kafka-connect-base:7.5.3
+    build:
+      dockerfile: Dockerfile
+      context: connect
+      args:
+        - DEBEZIUM_VERSION=${DEBEZIUM_VERSION}
+    #image: confluentinc/cp-kafka-connect-base:7.5.3
     hostname: connect
     container_name: connect
     networks:
@@ -89,46 +94,6 @@ services:
       - ./connect/start.sh:/scripts/start.sh
     command: /bin/bash /scripts/start.sh
 
-  # connect:
-  #   image: debezium/connect:2.6.1.Final
-  #   hostname: connect
-  #   container_name: connect
-  #   networks:
-  #     platform:
-  #   depends_on:
-  #     - kafka
-  #     - minio
-  #   ports:
-  #     - 8083:8083
-  #   environment:
-  #     BOOTSTRAP_SERVERS: 'kafka:9092'
-  #     GROUP_ID: connect-cluster-group
-  #     REST_ADVERTISED_HOST_NAME: "connect"
-  #     REST_PORT: 8083
-  #     CONFIG_STORAGE_TOPIC: _kafka-connect-configs
-  #     OFFSET_STORAGE_TOPIC: _kafka-connect-offsets
-  #     STATUS_STORAGE_TOPIC: _kafka-connect-status
-  #     KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-  #     KEY_CONVERTER_SCHEMAS_ENABLE: "false"
-  #     VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-  #     VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
-  #     INTERNAL_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-  #     INTERNAL_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
-  #     INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
-  #     INTERNAL_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
-  #     LOG4J_ROOT_LOGLEVEL: "INFO"
-  #     LOG4J_LOGGERS: "org.apache.kafka.connect.runtime.rest=WARN,org.reflections=ERROR"
-  #     CONFIG_STORAGE_REPLICATION_FACTOR: "1"
-  #     OFFSET_STORAGE_REPLICATION_FACTOR: "1"
-  #     STATUS_STORAGE_REPLICATION_FACTOR: "1"
-  #     PLUGIN_PATH: '/usr/share/java,/usr/share/confluent-hub-components/,/connectors/'
-  #     AWS_ACCESS_KEY_ID: "admin"
-  #     AWS_SECRET_ACCESS_KEY: "password"
-  #     AWS_REGION: "us-east-1"
-  #   volumes:
-  #     - ./connect/start.sh:/scripts/start.sh
-  #   command: /bin/bash /scripts/start.sh
-
   kafka-ui:
     image: 'provectuslabs/kafka-ui:latest'
     container_name: kafka-ui
@@ -150,7 +115,10 @@ services:
       #KAFKA_CLUSTERS_0_METRICS_PORT: 9997
 
   spark:
-    image: tabulario/spark-iceberg
+    #image: tabulario/spark-iceberg
+    build:
+      dockerfile: Dockerfile
+      context: spark
     hostname: spark
     container_name: spark
     networks:
@@ -165,6 +133,7 @@ services:
     volumes:
       - ./spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
       - ./spark/query.sql:/home/iceberg/query.sql
+      - ./warehouse:/home/iceberg/warehouse
     ports:
       - 8888:8888
       - 8080:8080

@@ -12,7 +12,8 @@ down:
 	docker compose down -v
 
 wait:
-	docker logs --follow cassandra | grep -q -i -m 1 polling
+	docker logs -f cassandra 2>&1 | grep -i -m 1 -e 'polling' -e 'exception'
+	docker logs -f connect 2>&1 | grep -i -m 1 -e 'finished' -e 'exception'
 
 all: down build up wait
 

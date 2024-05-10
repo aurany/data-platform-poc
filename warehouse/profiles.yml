@@ -1,0 +1,9 @@
+warehouse:
+  outputs:
+    dev:
+      host: spark
+      method: session
+      schema: dev
+      threads: 1
+      type: spark
+  target: dev
