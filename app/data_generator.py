@@ -2,6 +2,7 @@
 from faker import Faker
 import faker_commerce
 
+import time
 import random
 import uuid
 
@@ -14,29 +15,37 @@ from cassandra.cqlengine.models import Model
 fake = Faker()
 fake.add_provider(faker_commerce.Provider)
 
-class UserModel(Model):
-    user_id = columns.UUID(primary_key=True, default=uuid.uuid4)
-    user_name = columns.Text()
-    user_address = columns.Text()
+# This is a simplified normalized model generally considered an anti-pattern
+# when using Cassandra (recommended is "query-first").
+class CustomerModel(Model):
+    __table_name__ = 'customers'
+    __options__ = {'cdc': True}
+    customer_id = columns.UUID(primary_key=True, default=uuid.uuid4)
+    customer_name = columns.Text()
+    customer_address = columns.Text()
 
 class ProductModel(Model):
+    __table_name__ = 'products'
+    __options__ = {'cdc': True}
     product_id = columns.UUID(primary_key=True, default=uuid.uuid4)
     product_name = columns.Text()
     product_price = columns.Float()
 
 class OrderModel(Model):
+    __table_name__ = 'orders'
+    __options__ = {'cdc': True}
     order_id = columns.UUID(primary_key=True, default=uuid.uuid4)
     product_id = columns.UUID()
-    user_id = columns.UUID()
+    customer_id = columns.UUID()
+    order_quantity = columns.Integer()
 
-
-def get_random_user_id():
-    users = UserModel.objects.all() # not in production..
-    user_id = random.choice(users).user_id
-    return user_id
+def get_random_customer_id():
+    customers = CustomerModel.objects.all() # should not fetch all in prod..
+    customer_id = random.choice(customers).customer_id
+    return customer_id
 
 def get_random_product_id():
-    products = ProductModel.objects.all() # not in production..
+    products = ProductModel.objects.all() # should not fetch all in prod..
     product_id = random.choice(products).product_id
     return product_id
 
@@ -44,9 +53,9 @@ def get_random_product_id():
 def generate_mock_data(num_customers, num_products, num_orders):
 
     [
-        UserModel.create(
-            user_name=fake.name(),
-            user_address=fake.address()
+        CustomerModel.create(
+            customer_name=fake.name(),
+            customer_address=fake.address()
         )
         for _ in range(num_customers)
     ]
@@ -62,21 +71,73 @@ def generate_mock_data(num_customers, num_products, num_orders):
     [
         OrderModel.create(
             product_id=get_random_product_id(),
-            user_id=get_random_user_id()
+            customer_id=get_random_customer_id(),
+            order_quantity=random.choice([1, 2, 3, 4, 5])
         )
         for _ in range(num_orders)
     ]
 
+def simulation():
+
+    def _insert_customer():
+        CustomerModel.create(
+            customer_name=fake.name(),
+            customer_address=fake.address()
+        )
+
+    def _update_customer():
+        customer_id=get_random_customer_id()
+        customer = CustomerModel.get(customer_id=customer_id)
+        customer.customer_name=fake.name()
+        customer.save()
+
+    def _delete_customer():
+        customer_id=get_random_customer_id()
+        customer = CustomerModel.get(customer_id=customer_id)
+        customer.delete()
+
+    def _update_product():
+        product_id=get_random_product_id()
+        product = ProductModel.get(product_id=product_id)
+        product.product_price=fake.ecommerce_price()
+        product.save()
+
+    def _insert_order():
+        OrderModel.create(
+            product_id=get_random_product_id(),
+            customer_id=get_random_customer_id(),
+            order_quantity=random.choice([1, 2, 3, 4, 5])
+        )
+
+    while True:
+        random.choice([
+            _insert_customer(),
+            _update_customer(),
+            _delete_customer(),
+            _update_product(),
+            _insert_order()
+        ])
+        time.sleep(1)
 
 if __name__ == '__main__':
     
+    # connect to database
     connection.setup(['127.0.0.1'], "the_shop", protocol_version=3)
 
+    # create/sync tables
     [
         sync_table(model)
-        for model in[UserModel, ProductModel, OrderModel]
+        for model in[CustomerModel, ProductModel, OrderModel]
     ]
 
-    generate_mock_data(num_customers=10, num_products=20, num_orders=40)
+    # truncate all data
+    [
+        connection.execute(f'TRUNCATE the_shop.{table}')
+        for table in ['customers', 'products', 'orders']
+    ]
 
-    # enable cdc per table?
+    # generate mock data
+    generate_mock_data(num_customers=1, num_products=1, num_orders=1)
+
+    # start simulation
+    simulation()
