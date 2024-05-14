@@ -1,16 +1,15 @@
 
-from faker import Faker
-import faker_commerce
-
 import time
 import random
 import uuid
 
 from cassandra.cqlengine import columns
 from cassandra.cqlengine import connection
-from datetime import datetime
-from cassandra.cqlengine.management import sync_table
+from cassandra.cqlengine.management import sync_table, create_keyspace_simple
 from cassandra.cqlengine.models import Model
+
+from faker import Faker
+import faker_commerce
 
 fake = Faker()
 fake.add_provider(faker_commerce.Provider)
@@ -18,6 +17,7 @@ fake.add_provider(faker_commerce.Provider)
 # This is a simplified normalized model generally considered an anti-pattern
 # when using Cassandra (recommended is "query-first").
 class CustomerModel(Model):
+    __keyspace__ = 'the_shop'
     __table_name__ = 'customers'
     __options__ = {'cdc': True}
     customer_id = columns.UUID(primary_key=True, default=uuid.uuid4)
@@ -25,6 +25,7 @@ class CustomerModel(Model):
     customer_address = columns.Text()
 
 class ProductModel(Model):
+    __keyspace__ = 'the_shop'
     __table_name__ = 'products'
     __options__ = {'cdc': True}
     product_id = columns.UUID(primary_key=True, default=uuid.uuid4)
@@ -32,6 +33,7 @@ class ProductModel(Model):
     product_price = columns.Float()
 
 class OrderModel(Model):
+    __keyspace__ = 'the_shop'
     __table_name__ = 'orders'
     __options__ = {'cdc': True}
     order_id = columns.UUID(primary_key=True, default=uuid.uuid4)
@@ -122,7 +124,8 @@ def simulation():
 if __name__ == '__main__':
     
     # connect to database
-    connection.setup(['127.0.0.1'], "the_shop", protocol_version=3)
+    connection.setup(["cassandra"], "the_shop", protocol_version=3)
+    create_keyspace_simple("the_shop", 1, durable_writes=True, connections=None)
 
     # create/sync tables
     [

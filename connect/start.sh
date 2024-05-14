@@ -21,7 +21,7 @@ curl -X PUT \
     -H 'Accept: application/json' http://localhost:8083/connectors/IcebergSinkConnector/config \
     -d '{
         "tasks.max": "1",
-        "topics": "test_prefix.testdb.customers,test_prefix.testdb.products",
+        "topics": "debezium.the_shop.customers,debezium.the_shop.products,debezium.the_shop.orders",
         "connector.class": "io.tabular.iceberg.connect.IcebergSinkConnector",
         "iceberg.catalog.s3.endpoint": "http://minio:9000",
         "iceberg.catalog.s3.secret-access-key": "password",
@@ -35,9 +35,10 @@ curl -X PUT \
         "iceberg.tables.auto-create-enabled": "true",
         "iceberg.tables.evolve-schema-enabled": "true",
         "iceberg.tables.route-field": "__table",
-        "iceberg.table.testdb.customers.route-regex": "customers",
-        "iceberg.table.testdb.products.route-regex": "products",
-        "iceberg.tables": "testdb.customers,testdb.products",
+        "iceberg.table.the_shop.customers.route-regex": "customers",
+        "iceberg.table.the_shop.products.route-regex": "products",
+        "iceberg.table.the_shop.orders.route-regex": "orders",
+        "iceberg.tables": "the_shop.customers,the_shop.products,the_shop.orders",
         "key.converter": "org.apache.kafka.connect.json.JsonConverter",
         "key.converter.schemas.enable": "true",
         "value.converter": "org.apache.kafka.connect.json.JsonConverter",
