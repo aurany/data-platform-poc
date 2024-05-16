@@ -1,9 +1,11 @@
 version: 2
 
 sources:
-  - name: testdb
-    schema: testdb
+  - name: the_shop
+    schema: the_shop
     config:
       enabled: true
     tables:
-      - name: customers  # enabled
+      - name: customers
+      - name: products
+      - name: orders

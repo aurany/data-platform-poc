@@ -11,9 +11,17 @@
 
 with source_data as (
 
-    select 1 as id
-    union all
-    select null as id
+    select
+        customer_id.value as customer_id,
+        customer_address.value as customer_address,
+        customer_name.value as customer_name,
+        __op as source_operation,
+        __table as source_table,
+        from_unixtime(
+            __source_ts_ms/1000,
+            'yyyy-MM-dd HH:mm:ss'
+        ) as source_timestamp
+    from {{ source('the_shop', 'customers') }}
 
 )
 

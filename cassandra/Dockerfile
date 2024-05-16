@@ -17,7 +17,7 @@ RUN mkdir $DEBEZIUM_HOME
 RUN curl -fSL -o $DEBEZIUM_HOME/debezium-connector-cassandra.jar \
                  $MAVEN_CENTRAL/io/debezium/debezium-connector-cassandra-4/$DEBEZIUM_VERSION/debezium-connector-cassandra-4-$DEBEZIUM_VERSION-jar-with-dependencies.jar
 
-COPY log4j.properties config.properties start.sh $DEBEZIUM_HOME/
+COPY log4j.properties config.properties start.sh inventory.cql $DEBEZIUM_HOME/
 
 RUN chmod +x $DEBEZIUM_HOME/start.sh &&\
     chown -R cassandra:cassandra $CASSANDRA_CONF_HOME/cassandra.yaml $DEBEZIUM_HOME

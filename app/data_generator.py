@@ -124,8 +124,13 @@ def simulation():
 if __name__ == '__main__':
     
     # connect to database
-    connection.setup(["cassandra"], "the_shop", protocol_version=3)
-    create_keyspace_simple("the_shop", 1, durable_writes=True, connections=None)
+    while True:
+        try:
+            connection.setup(["cassandra"], "the_shop", protocol_version=3)
+            create_keyspace_simple("the_shop", 1, durable_writes=True, connections=None)
+            break
+        except:
+            time.sleep(3)
 
     # create/sync tables
     [

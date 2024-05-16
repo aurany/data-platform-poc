@@ -13,16 +13,18 @@ services:
       context: cassandra
       args:
         - DEBEZIUM_VERSION=${DEBEZIUM_VERSION}
+        - TZ=Europe/Stockholm
     ports:
       - 9042:9042
     environment:
       - CQLENG_ALLOW_SCHEMA_MANAGEMENT=1
     depends_on:
-      #- schema-registry
       - kafka
-    links:
-      #- schema-registry
-      - kafka
+    healthcheck:
+      test: ["CMD-SHELL", "[ $$(nodetool statusgossip) = running ]"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   kafka:
     image: confluentinc/cp-kafka:7.5.3
@@ -34,6 +36,7 @@ services:
       - "9092:9092"
       - "9101:9101"
     environment:
+      TZ: 'Europe/Stockholm'
       KAFKA_NODE_ID: 1
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT'
       KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:9092'
@@ -68,6 +71,7 @@ services:
     ports:
       - 8083:8083
     environment:
+      TZ: 'Europe/Stockholm'
       CONNECT_BOOTSTRAP_SERVERS: 'kafka:9092'
       CONNECT_REST_ADVERTISED_HOST_NAME: "connect"
       CONNECT_REST_PORT: 8083
@@ -107,10 +111,8 @@ services:
     depends_on:
       - kafka
       #- schema-registry
-    links:
-      - kafka
-      #- schema-registry
     environment:
+      TZ: 'Europe/Stockholm'
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
       #KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
@@ -129,6 +131,7 @@ services:
       - rest
       - minio
     environment:
+      - TZ=Europe/Stockholm
       - AWS_ACCESS_KEY_ID=admin
       - AWS_SECRET_ACCESS_KEY=password
       - AWS_REGION=us-east-1
@@ -151,6 +154,7 @@ services:
     ports:
       - 8181:8181
     environment:
+      - TZ=Europe/Stockholm
       - AWS_ACCESS_KEY_ID=admin
       - AWS_SECRET_ACCESS_KEY=password
       - AWS_REGION=us-east-1
@@ -163,6 +167,7 @@ services:
     hostname: minio
     container_name: minio
     environment:
+      - TZ=Europe/Stockholm
       - MINIO_ROOT_USER=admin
       - MINIO_ROOT_PASSWORD=password
       - MINIO_DOMAIN=minio
@@ -184,6 +189,7 @@ services:
     networks:
       platform:
     environment:
+      - TZ=Europe/Stockholm
       - AWS_ACCESS_KEY_ID=admin
       - AWS_SECRET_ACCESS_KEY=password
       - AWS_REGION=us-east-1
@@ -205,8 +211,12 @@ services:
     networks:
       platform:
     depends_on:
-      - cassandra
-      - connect
+      cassandra:
+        condition: service_healthy
+      connect:
+        condition: service_healthy
+    environment:
+      - TZ=Europe/Stockholm
 
 
 networks:
@@ -217,8 +227,6 @@ networks:
   #   hostname: schema-registry
   #   container_name: schema-registry
   #   depends_on:
-  #     - kafka
-  #   links:
   #     - kafka
   #   ports:
   #     - "8081:8081"
@@ -234,8 +242,6 @@ networks:
   #     dockerfile: Dockerfile
   #     context: spark
   #   depends_on:
-  #     - minio
-  #   links:
   #     - minio
   #   environment:
   #     - SPARK_MODE=master
@@ -256,8 +262,6 @@ networks:
   #   hostname: spark-worker
   #   depends_on:
   #     - spark-master
-  #   links:
-  #     - spark-master
   #   environment:
   #     - SPARK_MODE=worker
   #     - SPARK_MASTER_URL=spark://spark-master:7077
@@ -275,8 +279,6 @@ networks:
   #   container_name: app
   #   hostname: app
   #   depends_on:
-  #     - spark-master
-  #   links:
   #     - spark-master
   #   volumes:
   #     - ./app.py:/app.py

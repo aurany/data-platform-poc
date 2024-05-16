@@ -43,14 +43,23 @@ curl -X PUT \
         "key.converter.schemas.enable": "true",
         "value.converter": "org.apache.kafka.connect.json.JsonConverter",
         "value.converter.schemas.enable": "true",
-        "transforms": "unwrap",
+        "transforms": "unwrap,convertTimezone",
         "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
-        "transforms.unwrap.add.fields": "op,table,source.ts_ms"
+        "transforms.unwrap.add.fields": "op,table,source.ts_ms",
+        "transforms.convertTimezone.type": "io.debezium.transforms.TimezoneConverter",
+        "transforms.convertTimezone.converted.timezone": "+02:00"
     }'
 sleep infinity
 
-        # "transforms.extract.type": "org.apache.kafka.connect.transforms.ExtractField$Value",
-        # "transforms.extract.field": "value"
+# "transforms.ExtractField.type": "org.apache.kafka.connect.transforms.ExtractField$Value",
+# "transforms.ExtractField.field": "value"
+
+# "iceberg.tables.default-id-columns": "value",
+# "iceberg.tables.cdc-field": "__op",
+# "iceberg.tables.upsert-mode-enabled": "true",
+
+# "transforms.extract.type": "org.apache.kafka.connect.transforms.ExtractField$Value",
+# "transforms.extract.field": "value"
 
 # "transforms": "flatten",
 # "transforms.flatten.type": "org.apache.kafka.connect.transforms.Flatten$Value",

@@ -1,17 +1,39 @@
 #!/bin/sh
 
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+echo "Removing logfiles..."
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+rm -rf /opt/cassandra/logs/system.log
+rm -rf /debezium/debezium.log
+
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+echo "Starting Cassandra..."
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 sh /opt/cassandra/bin/cassandra -f &
 
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+echo "Waiting for cassandra logfile to be created..."
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 while ! ls /opt/cassandra/logs | grep -q system.log
 do
   sleep 1
 done;
 
-while ! grep -q "Created default superuser role 'cassandra" /opt/cassandra/logs/system.log
-do
-  sleep 1
-done;
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+echo "Waiting for Cassandra to be ready..."
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+until cqlsh -e 'describe cluster' ; do
+    sleep 1
+done
 
+#echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+#echo "Creating tables..."
+#echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+#cqlsh -f /debezium/inventory.cql
+
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+echo "Starting Debezium..."
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 java \
     -Dlog4j.debug \
     -Dlog4j.configuration=file:$DEBEZIUM_HOME/log4j.properties \
